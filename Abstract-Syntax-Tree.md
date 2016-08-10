@@ -41,3 +41,80 @@ Because the compiler traverses the tree several times to determine syntactic cor
 
 
 This has been directly taken from Wikipedia : https://en.wikipedia.org/wiki/Abstract_syntax_tree
+Interestingly eclipse provides an AST view, find out more here http://www.eclipse.org/jdt/ui/astview/index.php
+
+
+# The AST we will be using.
+
+As mentioned, the parser will build a structure which faithfully represents the semantics of the program. An AST node is a plain JavaScript object that has a type property specifying what kind of node it is, and additional information, depending on the particular type.
+
+In short:
+
+num { type: "num", value: NUMBER }
+str { type: "str", value: STRING }
+bool { type: "bool", value: true or false }
+var { type: "var", value: NAME }
+lambda { type: "lambda", vars: [ NAME... ], body: AST }
+call { type: "call", func: AST, args: [ AST... ] }
+if { type: "if", cond: AST, then: AST, else: AST }
+assign { type: "assign", operator: "=", left: AST, right: AST }
+binary { type: "binary", operator: OPERATOR, left: AST, right: AST }
+prog { type: "prog", prog: [ AST... ] }
+let { type: "let", vars: [ VARS... ], body: AST }
+
+Examples
+
+The following program text
+```angu
+sum = lambda(a, b) {
+  a + b;
+};
+print(sum(1, 2));
+```
+
+The parser should generate the following AST, as a JS object
+```javascript
+{
+  type: "prog",
+  prog: [
+    // first line:
+    {
+      type: "assign",
+      operator: "=",
+      left: { type: "var", value: "sum" },
+      right: {
+        type: "lambda",
+        vars: [ "a", "b" ],
+        body: {
+          // the body should be a "prog", but because
+          // it contains a single expression, our parser
+          // reduces it to the expression itself.
+          type: "binary",
+          operator: "+",
+          left: { type: "var", value: "a" },
+          right: { type: "var", value: "b" }
+        }
+      }
+    },
+    // second line:
+    {
+      type: "call",
+      func: { type: "var", value: "print" },
+      args: [{
+        type: "call",
+        func: { type: "var", value: "sum" },
+        args: [ { type: "num", value: 1 },
+                { type: "num", value: 2 } ]
+      }]
+    }
+  ]
+}
+```
+
+The main difficulty in writing a parser consists in a failure to properly organize the code. The parser should operate at a higher level than reading characters from a string. A few advices on how to keep complexity manageable:
+
+1. Write many functions and keep them small. In every function, do one thing and do it well.
+
+2. Do not try to use regexps for parsing. They don't work. Regexps can be helpful in the lexer though, but I suggest to limit them to very simple things.
+
+3. Don't attempt to guess. When unsure how to parse something, throw an error and make sure the message contains the error location (line/column).
